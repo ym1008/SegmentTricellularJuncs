@@ -37,6 +37,7 @@ def get_args():
 	parser.add_argument('--feats', default=256, type=int)  #multiple of filters to use
 	parser.add_argument('--commit', required=True, type=str)
 	parser.add_argument('--gpuNo', default=0, type=int)
+	parser.add_argument('--freeze', action='store_false')
 
 	return parser.parse_args()
 
@@ -94,11 +95,8 @@ def train(net, trainLoader, testLoader, opts):
 					% (e, i, loss.item(), time()-T)
 
 
-		save_image(output, join(exDir,'rec_train_e'+str(e)+'.png'), normalize=True, nrow = 4)
-		if e == 0:
-			save_image(y, join(exDir,'orig_train.png'), normalize=True, nrow = 4)
-
-
+		save_image(output, join(exDir,'rec_train_e'+str(e)+'.png'), normalize=True, nrow = 5)
+		
 		# Test
 		net.eval()
 		T = time()
@@ -123,9 +121,9 @@ def train(net, trainLoader, testLoader, opts):
 		plot_losses(losses, exDir, epochs=e+1)
 
 		# save the segmentations of the test images... train images too? Few examples? 
-		save_image(output, join(exDir,'rec_test_e'+str(e)+'.png'), normalize=True, nrow = 4)
+		save_image(output, join(exDir,'rec_test_e'+str(e)+'.png'), normalize=True, nrow = opts.batchSize/2)
 		if e == 0:
-			save_image(y, join(exDir,'orig_test.png'), normalize=True, nrow = 4)
+			save_image(y, join(exDir,'orig_test.png'), normalize=True, nrow = opts.batchSize/2)
 	
 
 		####### Save params #######
@@ -143,19 +141,19 @@ if __name__=='__main__':
 	xtrainTransform = transforms.Compose([transforms.ToPILImage(), transforms.Grayscale(3),\
 		transforms.ColorJitter(brightness=0.5, contrast=0.5), transforms.ToTensor(),\
 		transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)), transforms.ToPILImage(),\
-		transforms.TenCrop(opts.imSize), transforms.Lambda(lambda crops: torch.stack([transforms.ToTensor()(crop) for crop in crops]))])
+		transforms.FiveCrop(opts.imSize), transforms.Lambda(lambda crops: torch.stack([transforms.ToTensor()(crop) for crop in crops]))])
 
-	ytrainTransform = transforms.Compose([transforms.ToPILImage(), transforms.TenCrop(opts.imSize),\
+	ytrainTransform = transforms.Compose([transforms.ToPILImage(), transforms.FiveCrop(opts.imSize),\
 	 	transforms.Lambda(lambda crops: torch.stack([transforms.ToTensor()(crop) for crop in crops]))])
 
 	trainDataset = ConfocalData(root=opts.root, train=True, xtransform=xtrainTransform, ytransform = ytrainTransform)
 	trainLoader = torch.utils.data.DataLoader(trainDataset, batch_size=opts.batchSize, shuffle=True)
 
 
-	xtestTransform = transforms.Compose([transforms.ToPILImage(), transforms.Resize((opts.imSize, opts.imSize)),\
-		transforms.Grayscale(3), transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+	xtestTransform = transforms.Compose([transforms.ToPILImage(), transforms.Grayscale(3),\
+		transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
 
-	ytestTransform = transforms.Compose([transforms.ToPILImage(), transforms.Resize((opts.imSize, opts.imSize)), transforms.ToTensor()])
+	ytestTransform = transforms.Compose([transforms.ToPILImage(), transforms.ToTensor()])
 	
 	testDataset = ConfocalData(root=opts.root, train=False, xtransform=xtestTransform, ytransform=ytestTransform)
 	testLoader = torch.utils.data.DataLoader(testDataset, batch_size=opts.batchSize, shuffle=False)
@@ -165,7 +163,7 @@ if __name__=='__main__':
 	
 	###### Create model ######
 	
-	net = RefineNet4Cascade(input_shape=(3,opts.imSize), num_classes=1, features=opts.feats, freeze_resnet=True)
+	net = RefineNet4Cascade(input_shape=(3,opts.imSize), num_classes=1, features=opts.feats, freeze_resnet=opts.freeze)
 
 	train(net, trainLoader, testLoader, opts)
 
