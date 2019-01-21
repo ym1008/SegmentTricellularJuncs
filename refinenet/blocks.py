@@ -3,7 +3,7 @@ import torch.nn as nn
 
 class ResidualConvUnit(nn.Module):
     def __init__(self, features):
-        super().__init__()
+        super(ResidualConvUnit,self).__init__()
 
         self.conv1 = nn.Conv2d(
             features, features, kernel_size=3, stride=1, padding=1, bias=True)
@@ -23,7 +23,7 @@ class ResidualConvUnit(nn.Module):
 
 class MultiResolutionFusion(nn.Module):
     def __init__(self, out_feats, *shapes):
-        super().__init__()
+        super(MultiResolutionFusion,self).__init__()
 
         _, max_size = max(shapes, key=lambda x: x[1])
 
@@ -68,7 +68,7 @@ class MultiResolutionFusion(nn.Module):
 
 class ChainedResidualPool(nn.Module):
     def __init__(self, feats):
-        super().__init__()
+        super(ChainedResidualPool, self).__init__()
 
         self.relu = nn.ReLU(inplace=True)
         for i in range(1, 4):
@@ -97,7 +97,7 @@ class ChainedResidualPool(nn.Module):
 
 class ChainedResidualPoolImproved(nn.Module):
     def __init__(self, feats):
-        super().__init__()
+        super(ChainedResidualPoolImproved, self).__init__()
 
         self.relu = nn.ReLU(inplace=True)
         for i in range(1, 5):
@@ -127,7 +127,7 @@ class ChainedResidualPoolImproved(nn.Module):
 class BaseRefineNetBlock(nn.Module):
     def __init__(self, features, residual_conv_unit, multi_resolution_fusion,
                  chained_residual_pool, *shapes):
-        super().__init__()
+        super(BaseRefineNetBlock, self).__init__()
 
         for i, shape in enumerate(shapes):
             feats = shape[0]
@@ -161,11 +161,11 @@ class BaseRefineNetBlock(nn.Module):
 
 class RefineNetBlock(BaseRefineNetBlock):
     def __init__(self, features, *shapes):
-        super().__init__(features, ResidualConvUnit, MultiResolutionFusion,
+        super(RefineNetBlock, self).__init__(features, ResidualConvUnit, MultiResolutionFusion,
                          ChainedResidualPool, *shapes)
 
 
 class RefineNetBlockImprovedPooling(BaseRefineNetBlock):
     def __init__(self, features, *shapes):
-        super().__init__(features, ResidualConvUnit, MultiResolutionFusion,
+        super(RefineNetBlockImprovedPooling, self).__init__(features, ResidualConvUnit, MultiResolutionFusion,
                          ChainedResidualPoolImproved, *shapes)

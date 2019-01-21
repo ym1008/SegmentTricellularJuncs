@@ -32,7 +32,7 @@ class BaseRefineNet4Cascade(nn.Module):
         Raises:
             ValueError: size of input_shape not divisible by 32
         """
-        super().__init__()
+        super(BaseRefineNet4Cascade, self).__init__()
 
         input_channel, input_size = input_shape
 
@@ -101,6 +101,7 @@ class BaseRefineNet4Cascade(nn.Module):
         path_2 = self.refinenet2(path_3, layer_2_rn)
         path_1 = self.refinenet1(path_2, layer_1_rn)
         out = self.output_conv(path_1)
+
         return out
 
 
@@ -130,7 +131,7 @@ class RefineNet4CascadePoolingImproved(BaseRefineNet4Cascade):
         Raises:
             ValueError: size of input_shape not divisible by 32
         """
-        super().__init__(
+        super(RefineNet4CascadePoolingImproved, self).__init__(
             input_shape,
             RefineNetBlockImprovedPooling,
             num_classes=num_classes,
@@ -166,7 +167,7 @@ class RefineNet4Cascade(BaseRefineNet4Cascade):
         Raises:
             ValueError: size of input_shape not divisible by 32
         """
-        super().__init__(
+        super(RefineNet4Cascade,self).__init__(
             input_shape,
             RefineNetBlock,
             num_classes=num_classes,

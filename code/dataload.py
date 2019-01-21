@@ -15,27 +15,28 @@ class ConfocalData(data.Dataset):
     """
 
 
-    def __init__(self, root, train=True, transform=None):
+    def __init__(self, root, train=True, xtransform=None, ytransform=None):
         
         self.root = os.path.expanduser(root)
         self.train = train  # training set or test set
-        self.transform=transform
+        self.xtransform=xtransform
+        self.ytransform=ytransform
        
         self.loadData()
 
 
     def loadData(self):
 
-        #load data
+        data = np.load(join(self.root, 'xData.npy'), mmap_mode='r') 
+        labels = np.load(join(self.root, 'yData.npy'), mmap_mode='r') 
+        
         if self.train: 
-            self.data = np.load(join(self.root, 'xtrain.npy'), mmap_mode='r') 
-            self.labels = np.load(join(self.root, 'ytrain.npy'), mmap_mode='r') 
-            self.labels = self.labels.astype(int)
+            self.data = data[:-128]
+            self.labels = labels[:-128]    
             print 'Training data and labels: ', np.shape(self.data), np.shape(self.labels)
         else: 
-            self.data = np.load(join(self.root, 'xtest.npy'), mmap_mode='r')
-            self.labels = np.load(join(self.root, 'ytest.npy'), mmap_mode='r')
-            self.labels = self.labels.astype(int)
+            self.data = data[-128:]
+            self.labels = labels[-128:]
             print 'Testing data and labels: ', np.shape(self.data), np.shape(self.labels)
 
 
@@ -48,12 +49,15 @@ class ConfocalData(data.Dataset):
         """
 
         img = self.data[index]
-        img = np.uint8(img*255) # this was for omniglot data which was binary black and white... Need to think what to do with 1 channel data. 
+        labels = self.labels[index]
 
-        if self.transform:
-            img = self.transform(img)
+        if self.xtransform:
+            img = self.xtransform(img)
 
-        return img, self.labels[index]
+        if self.ytransform:
+            labels = self.ytransform(labels)
+
+        return img, labels
        
 
     def __len__(self):
