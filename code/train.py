@@ -102,11 +102,11 @@ def train(net, trainLoader, testLoader, opts):
 				plot_losses(losses, exDir, factor=factor)
 
 			if (i + e*len(trainLoader)) % 100 == 0:
-				print 'Evaluating...'
+				u = i + e*len(trainLoader)
 
-				save_image(output, join(exDir_train,'strain_e'+str(e)+'_i' + str(i)+'.png'), normalize=True, scale_each=True)
-				save_image(x, join(exDir_train,'xtrain_e'+str(e)+'_i' + str(i)+'.png'), normalize=True, scale_each=True)
-				save_image(y, join(exDir_train,'ytrain_e'+str(e)+'_i' + str(i)+'.png'), normalize=True, scale_each=True)
+				save_image(output, join(exDir_train,'strain_u'+str(u)+'.png'), normalize=True, scale_each=True)
+				save_image(x, join(exDir_train,'xtrain_u'+str(u)+'.png'), normalize=True, scale_each=True)
+				save_image(y, join(exDir_train,'ytrain_u'+str(u)+'.png'), normalize=True, scale_each=True)
 		
 				# Test
 				net.eval()
@@ -138,14 +138,14 @@ def train(net, trainLoader, testLoader, opts):
 				plot_losses(losses, exDir, factor=factor)
 
 				# save the segmentations of the test images... train images too? Few examples? 
-				save_image(torch.cat(plots,0), join(exDir_eval,'stest_e'+str(e)+'_i'+str(i)+'.png'), normalize=True, scale_each=True)
+				save_image(torch.cat(plots,0), join(exDir_eval,'stest_u'+str(u)+'.png'), normalize=True, scale_each=True)
 				save_image(torch.cat(ploty,0), join(exDir_eval,'ytest.png'), normalize=True, scale_each=True)
 				save_image(torch.cat(plotx,0), join(exDir_eval,'xtest.png'), normalize=True, scale_each=True)
 			
 
 				####### Save params #######
 				print 'saving params to: ', exDir_params
-				torch.save(net.state_dict(), join(exDir_params, 'params_e'+str(e)+'_i'+str(i)))
+				torch.save(net.state_dict(), join(exDir_params, 'params_u'+str(u)))
 
 				# Save losses
 				sp.savemat(join(exDir, 'losses.mat'), mdict = {'train': np.array(losses['train'])})
