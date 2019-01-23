@@ -54,6 +54,8 @@ class BaseRefineNet4Cascade(nn.Module):
                 for param in layer.parameters():
                     param.requires_grad = False
 
+        self.layer0_rn = nn.Conv2d(
+            3, features, kernel_size=3, stride=1, padding=1, bias=False)
         self.layer1_rn = nn.Conv2d(
             256, features, kernel_size=3, stride=1, padding=1, bias=False)
         self.layer2_rn = nn.Conv2d(
@@ -73,6 +75,8 @@ class BaseRefineNet4Cascade(nn.Module):
                                          (features, input_size // 8))
         self.refinenet1 = RefineNetBlock(features, (features, input_size // 8),
                                          (features, input_size // 4))
+        self.refinenet0 = RefineNetBlock(features, (features, input_size // 4),
+                                         (features, input_size))
 
         self.output_conv = nn.Sequential(
             ResidualConvUnit(features), ResidualConvUnit(features),
@@ -82,7 +86,8 @@ class BaseRefineNet4Cascade(nn.Module):
                 kernel_size=1,
                 stride=1,
                 padding=0,
-                bias=True))
+                bias=True), 
+            nn.Sigmoid())
 
     def forward(self, x):
 
@@ -91,6 +96,7 @@ class BaseRefineNet4Cascade(nn.Module):
         layer_3 = self.layer3(layer_2)
         layer_4 = self.layer4(layer_3)
 
+        layer_0_rn = self.layer0_rn(x)
         layer_1_rn = self.layer1_rn(layer_1)
         layer_2_rn = self.layer2_rn(layer_2)
         layer_3_rn = self.layer3_rn(layer_3)
@@ -100,7 +106,8 @@ class BaseRefineNet4Cascade(nn.Module):
         path_3 = self.refinenet3(path_4, layer_3_rn)
         path_2 = self.refinenet2(path_3, layer_2_rn)
         path_1 = self.refinenet1(path_2, layer_1_rn)
-        out = self.output_conv(path_1)
+        path_0 = self.refinenet0(path_1, layer_0_rn)
+        out = self.output_conv(path_0)
 
         return out
 

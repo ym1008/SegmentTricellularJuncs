@@ -15,30 +15,23 @@ class ConfocalData(data.Dataset):
     """
 
 
-    def __init__(self, root, train=True, xtransform=None, ytransform=None):
+
+    def __init__(self, root, filename, xtransform=None, ytransform=None):
         
         self.root = os.path.expanduser(root)
-        self.train = train  # training set or test set
+        self.filename = filename
         self.xtransform=xtransform
         self.ytransform=ytransform
-       
+
         self.loadData()
 
 
     def loadData(self):
 
-        data = np.load(join(self.root, 'xData.npy'), mmap_mode='r') 
-        labels = np.load(join(self.root, 'yData.npy'), mmap_mode='r') 
+        self.data = np.load(join(self.root, 'x'+self.filename+'.npy'), mmap_mode='r') 
+        self.labels = np.load(join(self.root, 'y'+self.filename+'.npy'), mmap_mode='r') 
+        print 'Data and label shape: ', np.shape(self.data), np.shape(self.labels)
         
-        if self.train: 
-            self.data = data[:-128]
-            self.labels = labels[:-128]    
-            print 'Training data and labels: ', np.shape(self.data), np.shape(self.labels)
-        else: 
-            self.data = data[-128:]
-            self.labels = labels[-128:]
-            print 'Testing data and labels: ', np.shape(self.data), np.shape(self.labels)
-
 
     def __getitem__(self, index):
         """
