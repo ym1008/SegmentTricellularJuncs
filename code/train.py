@@ -31,18 +31,23 @@ def get_args():
 	parser = argparse.ArgumentParser()
 	parser.add_argument('--root', default='../data/', type=str)
 	parser.add_argument('--outDir', default='../Experiments', type=str)
-	parser.add_argument('--batchSize', default=4, type=int)
-	parser.add_argument('--maxEpochs', default=150, type=int)
-	parser.add_argument('--lr', default=1e-5, type=float)
-	parser.add_argument('--smooth', default=1.0, type=float)
+	parser.add_argument('--batchSize', default=32, type=int)
+	parser.add_argument('--maxEpochs', default=30, type=int)
+	parser.add_argument('--lr', default=1e-4, type=float)
+	parser.add_argument('--smooth', default=0.0, type=float)
 	parser.add_argument('--imSize', default=64, type=int)  # 64, 128, or 256.
-	parser.add_argument('--feats', default=256, type=int)  #multiple of filters to use
+	parser.add_argument('--feats', default=128, type=int)  #multiple of filters to use
 	parser.add_argument('--commit', required=True, type=str)
 	parser.add_argument('--gpuNo', default=0, type=int)
 	parser.add_argument('--freeze', action='store_false')
 
 	return parser.parse_args()
 
+
+def make_folder(exDir):
+	if not os.path.isdir(exDir):
+		os.mkdir(exDir)
+	return exDir
 
 def train(net, trainLoader, testLoader, opts):
 
@@ -55,22 +60,25 @@ def train(net, trainLoader, testLoader, opts):
 	if useCUDA:
 		torch.cuda.set_device(opts.gpuNo)
 		net.cuda()
-
 	
 	####### Create a new folder to save results and model info #######
 	exDir = make_new_folder(opts.outDir)
 	print 'Outputs will be saved to:', exDir
 	save_input_args(exDir, opts)
 
+	exDir_params = make_folder(join(exDir, 'params'))
+	exDir_train = make_folder(join(exDir, 'plot_train'))
+	exDir_eval = make_folder(join(exDir, 'plot_eval'))
+	
 
 	####### Start Training #######
 	losses = {'train':[], 'test':[]} 
+	factor = {'train':1, 'test':100}
 
 	for e in range(opts.maxEpochs):
-		net.train()
 		T = time()
 		for i, (x,y) in enumerate(trainLoader, 0):
-
+			net.train()
 			x = Variable(x).cuda() if useCUDA else Variable(x)
 			y = y.cuda() if useCUDA else y
 
@@ -85,52 +93,63 @@ def train(net, trainLoader, testLoader, opts):
 			loss.backward() 
 			opt.step()
 
+
 			####### Print info #######
-			if i%20==1:
+			if i%100==0:
 				print '[%d, %d] train: %.5f, time: %.2f' \
 					% (e, i, loss.item(), time()-T)
 
+				plot_losses(losses, exDir, factor=factor)
 
-		save_image(output, join(exDir,'rec_train_e'+str(e)+'.png'), normalize=True, scale_each=True, nrow = 5)
-		save_image(x, join(exDir,'xtrain_e'+str(e)+'.png'), normalize=True, scale_each=True, nrow = 5)
-		save_image(y, join(exDir,'ytrain_e'+str(e)+'.png'), normalize=True, scale_each=True, nrow = 5)
+			if (i + e*len(trainLoader)) % 100 == 0:
+				print 'Evaluating...'
+
+				save_image(output, join(exDir_train,'strain_e'+str(e)+'_i' + str(i)+'.png'), normalize=True, scale_each=True)
+				save_image(x, join(exDir_train,'xtrain_e'+str(e)+'_i' + str(i)+'.png'), normalize=True, scale_each=True)
+				save_image(y, join(exDir_train,'ytrain_e'+str(e)+'_i' + str(i)+'.png'), normalize=True, scale_each=True)
 		
-		# Test
-		net.eval()
-		T = time()
-		testloss = 0
-		n = 0
-		for i, (x,y) in enumerate(testLoader, 0):
+				# Test
+				net.eval()
+				testloss = 0
+				plotx = []
+				ploty = []
+				plots = []
+				n = 0
+				for j, (x,y) in enumerate(testLoader, 0):
 
-			x = Variable(x).cuda() if useCUDA else Variable(x)
-			y = y.cuda() if useCUDA else y
+					x = Variable(x).cuda() if useCUDA else Variable(x)
+					y = y.cuda() if useCUDA else y
 
-			output = net(x)
+					output = net(x)
+
+					if j == 0 or j == len(testLoader) -1 :
+						plotx.append(x)
+						ploty.append(y)
+						plots.append(output)
+					
+					# calculate the loss. 
+					loss = 1-2 * torch.sum(output * y, (1,2,3)) / (torch.sum(output**2 + y**2, (1, 2, 3)))
+					testloss = testloss + torch.sum(loss).item()
+					n = n + loss.shape[0]
+
+				testloss = testloss / n
+				losses['test'].append(testloss)	
+				
+				plot_losses(losses, exDir, factor=factor)
+
+				# save the segmentations of the test images... train images too? Few examples? 
+				save_image(torch.cat(plots,0), join(exDir_eval,'stest_e'+str(e)+'_i'+str(i)+'.png'), normalize=True, scale_each=True)
+				save_image(torch.cat(ploty,0), join(exDir_eval,'ytest.png'), normalize=True, scale_each=True)
+				save_image(torch.cat(plotx,0), join(exDir_eval,'xtest.png'), normalize=True, scale_each=True)
 			
-			# calculate the loss. 
-			loss = 1-2 * torch.sum(output * y, (1,2,3)) / (torch.sum(output**2 + y**2, (1, 2, 3)))
-			testloss = testloss + torch.sum(loss).item()
-			n = n + loss.shape[0]
 
-		testloss = testloss / n
-		losses['test'].append(testloss)	
-		
-		plot_losses(losses, exDir, epochs=e+1)
+				####### Save params #######
+				print 'saving params to: ', exDir_params
+				torch.save(net.state_dict(), join(exDir_params, 'params_e'+str(e)+'_i'+str(i)))
 
-		# save the segmentations of the test images... train images too? Few examples? 
-		save_image(output, join(exDir,'rec_test_e'+str(e)+'.png'), normalize=True, scale_each=True, nrow = opts.batchSize/2)
-		if e == 0:
-			save_image(y, join(exDir,'orig_test.png'), normalize=True, scale_each=True, nrow = opts.batchSize/2)
-			save_image(x, join(exDir,'orig_xtest.png'), normalize=True, scale_each=True, nrow = opts.batchSize/2)
-	
-
-		####### Save params #######
-		print 'saving params to: ', exDir
-		torch.save(net.state_dict(), join(exDir, 'params_'+str(e)))
-
-		# Save losses
-		sp.savemat(join(exDir, 'losses.mat'), mdict = {'train': np.array(losses['train'])})
-			
+				# Save losses
+				sp.savemat(join(exDir, 'losses.mat'), mdict = {'train': np.array(losses['train'])})
+				
 
 
 if __name__=='__main__':
