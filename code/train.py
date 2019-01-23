@@ -144,7 +144,6 @@ def train(net, trainLoader, testLoader, opts):
 			
 
 				####### Save params #######
-				print 'saving params to: ', exDir_params
 				torch.save(net.state_dict(), join(exDir_params, 'params_u'+str(u)))
 
 				# Save losses
