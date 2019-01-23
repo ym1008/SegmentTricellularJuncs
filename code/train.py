@@ -4,6 +4,7 @@ import os
 import torch
 import argparse
 import matplotlib 
+import scipy.io as sp
 import numpy as np
 
 from time import time
@@ -126,8 +127,10 @@ def train(net, trainLoader, testLoader, opts):
 		####### Save params #######
 		print 'saving params to: ', exDir
 		torch.save(net.state_dict(), join(exDir, 'params_'+str(e)))
-		
 
+		# Save losses
+		sp.savemat(join(exDir, 'losses.mat'), mdict = {'train': np.array(losses['train'])})
+			
 
 
 if __name__=='__main__':
