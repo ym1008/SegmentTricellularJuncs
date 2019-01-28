@@ -65,17 +65,17 @@ class BaseRefineNet4Cascade(nn.Module):
         self.layer4_rn = nn.Conv2d(
             2048, 2 * features, kernel_size=3, stride=1, padding=1, bias=False)
 
-        self.refinenet4 = refinenet_block(2 * features,
+        self.refinenet4 = RefineNetBlock(2 * features,
                                          (2 * features, input_size // 32))
-        self.refinenet3 = refinenet_block(features,
+        self.refinenet3 = RefineNetBlock(features,
                                          (2 * features, input_size // 32),
                                          (features, input_size // 16))
-        self.refinenet2 = refinenet_block(features,
+        self.refinenet2 = RefineNetBlock(features,
                                          (features, input_size // 16),
                                          (features, input_size // 8))
-        self.refinenet1 = refinenet_block(features, (features, input_size // 8),
+        self.refinenet1 = RefineNetBlock(features, (features, input_size // 8),
                                          (features, input_size // 4))
-        self.refinenet0 = refinenet_block(features, (features, input_size // 4),
+        self.refinenet0 = RefineNetBlock(features, (features, input_size // 4),
                                          (features, input_size))
 
         self.output_conv = nn.Sequential(
@@ -96,7 +96,7 @@ class BaseRefineNet4Cascade(nn.Module):
         layer_3 = self.layer3(layer_2)
         layer_4 = self.layer4(layer_3)
 
-        #layer_0_rn = self.layer0_rn(x)
+        layer_0_rn = self.layer0_rn(x)
         layer_1_rn = self.layer1_rn(layer_1)
         layer_2_rn = self.layer2_rn(layer_2)
         layer_3_rn = self.layer3_rn(layer_3)
@@ -106,8 +106,8 @@ class BaseRefineNet4Cascade(nn.Module):
         path_3 = self.refinenet3(path_4, layer_3_rn)
         path_2 = self.refinenet2(path_3, layer_2_rn)
         path_1 = self.refinenet1(path_2, layer_1_rn)
-        #path_0 = self.refinenet0(path_1, layer_0_rn)
-        out = self.output_conv(path_1)
+        path_0 = self.refinenet0(path_1, layer_0_rn)
+        out = self.output_conv(path_0)
 
         return out
 

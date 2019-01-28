@@ -21,8 +21,8 @@ from torch.autograd import Variable, grad
 from torch.nn.functional import interpolate
 import torch.nn.functional as F
 
-sys.path.append('../refinenet_fullres/')
-from refinenet_4cascade import RefineNet4Cascade, RefineNet4CascadePoolingImproved
+sys.path.append('../refinenet/')
+from refinenet_4cascade import RefineNet4Cascade
 from utils import make_new_folder, save_input_args, plot_losses
 from dataload import ConfocalData
 
@@ -34,14 +34,12 @@ def get_args():
 	parser.add_argument('--batchSize', default=32, type=int)
 	parser.add_argument('--maxEpochs', default=30, type=int)
 	parser.add_argument('--lr', default=1e-4, type=float)
-	parser.add_argument('--wd', default=0, type=float)
+	parser.add_argument('--smooth', default=0.0, type=float)
 	parser.add_argument('--imSize', default=64, type=int)  # 64, 128, or 256.
 	parser.add_argument('--feats', default=128, type=int)  #multiple of filters to use
 	parser.add_argument('--commit', required=True, type=str)
 	parser.add_argument('--gpuNo', default=0, type=int)
-	parser.add_argument('--freeze', action='store_false')	
-	parser.add_argument('--valbatchSize', default=16, type=int)
-	parser.add_argument('--valimSize', default=256, type=int)  # 64, 128, or 256.
+	parser.add_argument('--freeze', action='store_false')
 
 	return parser.parse_args()
 
@@ -51,50 +49,12 @@ def make_folder(exDir):
 		os.mkdir(exDir)
 	return exDir
 
-
-def eval(net, testLoader, losses, exDir, exDir_eval, factor, u, useCUDA):
-	net.eval()
-	testloss = 0
-	plotx = []
-	ploty = []
-	plots = []
-	n = 0
-	for j, (x,y) in enumerate(testLoader, 0):
-
-		x = Variable(x).cuda() if useCUDA else Variable(x)
-		y = y.cuda() if useCUDA else y
-
-		output = net(x)
-		output = interpolate(output, scale_factor=(4,4), mode='bilinear')
-
-		if j == 0 or j == len(testLoader) -1 :
-			plotx.append(x)
-			ploty.append(y)
-			plots.append(output)
-						
-		# calculate the loss. 
-		loss = 1-2 * torch.sum(output * y, (1,2,3)) / (torch.sum(output**2 + y**2, (1, 2, 3)))
-		testloss = testloss + torch.sum(loss).item()
-		n = n + loss.shape[0]
-
-	testloss = testloss / n
-	losses.append(testloss)	
-				
-
-	# save the segmentations of the test images... train images too? Few examples? 
-	save_image(torch.cat(plots,0), join(exDir_eval,'stest_u'+str(u)+'.png'), normalize=True, scale_each=True)
-	save_image(torch.cat(ploty,0), join(exDir_eval,'ytest.png'), normalize=True, scale_each=True)
-	save_image(torch.cat(plotx,0), join(exDir_eval,'xtest.png'), normalize=True, scale_each=True)
-			
-	return losses
-
-
-
-def train(net, trainLoader, opts, *testLoader):
+def train(net, trainLoader, testLoader, opts):
 
 	####### Define optimizer #######
-	opt = optim.Adam(net.parameters(), lr=opts.lr, weight_decay=opts.wd)
-	
+	opt = optim.Adam(net.parameters(), lr=opts.lr)
+	smooth = opts.smooth;
+
 	useCUDA = torch.cuda.is_available()
 
 	if useCUDA:
@@ -109,11 +69,11 @@ def train(net, trainLoader, opts, *testLoader):
 	exDir_params = make_folder(join(exDir, 'params'))
 	exDir_train = make_folder(join(exDir, 'plot_train'))
 	exDir_eval = make_folder(join(exDir, 'plot_eval'))
-	exDir_eval2 = make_folder(join(exDir, 'plot_eval', 'new'))
+	
 
 	####### Start Training #######
-	losses = {'train':[], 'test':[], 'test_new':[]} 
-	factor = {'train':1, 'test':100, 'test_new':100}
+	losses = {'train':[], 'test':[]} 
+	factor = {'train':1, 'test':100}
 
 	for e in range(opts.maxEpochs):
 		T = time()
@@ -123,10 +83,9 @@ def train(net, trainLoader, opts, *testLoader):
 			y = y.cuda() if useCUDA else y
 
 			output = net(x)
-			output = interpolate(output, scale_factor=(4,4), mode='bilinear')
 			
 			# calculate the loss. 
-			loss = 1-2 * torch.sum(output * y, (1,2,3)) / torch.sum(output**2 + y**2, (1, 2, 3))
+			loss = 1-2 * torch.sum(output * y, (1,2,3)) / (torch.sum(output**2 + y**2, (1, 2, 3)) + smooth)
 			loss = torch.mean(loss)
 
 			losses['train'].append(loss.item())	
@@ -143,26 +102,54 @@ def train(net, trainLoader, opts, *testLoader):
 				plot_losses(losses, exDir, factor=factor)
 
 			if (i + e*len(trainLoader)) % 100 == 0:
-				print 'eval'
 				u = i + e*len(trainLoader)
 
 				save_image(output, join(exDir_train,'strain_u'+str(u)+'.png'), normalize=True, scale_each=True)
 				save_image(x, join(exDir_train,'xtrain_u'+str(u)+'.png'), normalize=True, scale_each=True)
 				save_image(y, join(exDir_train,'ytrain_u'+str(u)+'.png'), normalize=True, scale_each=True)
 		
-				loss1 = eval(net, testLoader[0], losses['test'], exDir, exDir_eval, factor, u, useCUDA)
-				loss2 = eval(net, testLoader[1], losses['test_new'], exDir, exDir_eval2, factor, u, useCUDA)
+				# Test
+				net.eval()
+				testloss = 0
+				plotx = []
+				ploty = []
+				plots = []
+				n = 0
+				for j, (x,y) in enumerate(testLoader, 0):
 
-				losses['test'] = loss1
-				losses['test_new'] = loss2
+					x = Variable(x).cuda() if useCUDA else Variable(x)
+					y = y.cuda() if useCUDA else y
+
+					output = net(x)
+
+					if j == 0 or j == len(testLoader) -1 :
+						plotx.append(x)
+						ploty.append(y)
+						plots.append(output)
+					
+					# calculate the loss. 
+					loss = 1-2 * torch.sum(output * y, (1,2,3)) / (torch.sum(output**2 + y**2, (1, 2, 3)))
+					testloss = testloss + torch.sum(loss).item()
+					n = n + loss.shape[0]
+
+				testloss = testloss / n
+				losses['test'].append(testloss)	
+				
+				plot_losses(losses, exDir, factor=factor)
+
+				# save the segmentations of the test images... train images too? Few examples? 
+				save_image(torch.cat(plots,0), join(exDir_eval,'stest_u'+str(u)+'.png'), normalize=True, scale_each=True)
+				save_image(torch.cat(ploty,0), join(exDir_eval,'ytest.png'), normalize=True, scale_each=True)
+				save_image(torch.cat(plotx,0), join(exDir_eval,'xtest.png'), normalize=True, scale_each=True)
+			
 
 				####### Save params #######
-				# torch.save(net.state_dict(), join(exDir_params, 'params_u'+str(u)))
+				torch.save(net.state_dict(), join(exDir_params, 'params_u'+str(u)))
 
-				# plot and save losses
-				plot_losses(losses, exDir, factor=factor)
+				# Save losses
 				sp.savemat(join(exDir, 'losses.mat'), mdict = {'train': np.array(losses['train'])})
-	
+				
+
 
 if __name__=='__main__':
 	opts = get_args()
@@ -182,12 +169,8 @@ if __name__=='__main__':
 	trainDataset = ConfocalData(root=opts.root, filename='Train_'+str(opts.imSize), xtransform=xtrainTransform, ytransform = yTransform)
 	trainLoader = torch.utils.data.DataLoader(trainDataset, batch_size=opts.batchSize, shuffle=True)
 	
-	testDataset = ConfocalData(root=opts.root, filename='Val_'+str(opts.valimSize), xtransform=xtestTransform, ytransform=yTransform)
-	testLoader = torch.utils.data.DataLoader(testDataset, batch_size=opts.valbatchSize, shuffle=False)
-
-	testDataset2 = ConfocalData(root=opts.root, filename='Val_new_'+str(opts.valimSize), xtransform=xtestTransform, ytransform=yTransform)
-	testLoader2 = torch.utils.data.DataLoader(testDataset, batch_size=opts.valbatchSize, shuffle=False)
-
+	testDataset = ConfocalData(root=opts.root, filename='Val_'+str(opts.imSize), xtransform=xtestTransform, ytransform=yTransform)
+	testLoader = torch.utils.data.DataLoader(testDataset, batch_size=opts.batchSize, shuffle=False)
 
 	print 'Data loaders ready.'
 
@@ -196,7 +179,7 @@ if __name__=='__main__':
 	
 	net = RefineNet4Cascade(input_shape=(3,opts.imSize), num_classes=1, features=opts.feats, freeze_resnet=opts.freeze)
 
-	train(net, trainLoader, opts, testLoader, testLoader2)
+	train(net, trainLoader, testLoader, opts)
 
 
 
