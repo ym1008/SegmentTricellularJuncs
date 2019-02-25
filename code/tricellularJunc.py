@@ -3,8 +3,6 @@ import sys
 import os
 import torch
 import argparse
-import matplotlib 
-import scipy.io as sp
 import numpy as np
 
 from time import time
@@ -12,9 +10,6 @@ from PIL import Image
 from os.path import join
 from torchvision import transforms
 from torchvision.utils import save_image
-
-matplotlib.use('Agg')
-from matplotlib import pyplot as plt
 
 from torch import optim
 from torch.autograd import Variable, grad
@@ -43,9 +38,6 @@ def run(net, x, opts):
 
 	useCUDA = torch.cuda.is_available()
 
-	if useCUDA:
-		net.cuda()
-	
 	net.eval()
 	x = Variable(x).cuda() if useCUDA else Variable(x)
 	output = net(x)
@@ -59,8 +51,16 @@ def run(net, x, opts):
 if __name__=='__main__':
 	opts = get_args()
 
+	useCUDA = torch.cuda.is_available()
+
 	net = RefineNet4Cascade(input_shape=(3,opts.imSize), num_classes=1, features=opts.feats, freeze_resnet=opts.freeze)
-	net.load_state_dict(torch.load(join(opts.modelDir, 'params_u' + str(opts.update))))
+	
+	if useCUDA:
+		net.cuda()
+		net.load_state_dict(torch.load(join(opts.modelDir, 'params_u' + str(opts.update))))
+	else:
+		net.load_state_dict(torch.load(join(opts.modelDir, 'params_u' + str(opts.update)), map_location='cpu'))
+	
 
 	xTransform = transforms.Compose([transforms.ToPILImage(), transforms.Grayscale(3),\
 		transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
